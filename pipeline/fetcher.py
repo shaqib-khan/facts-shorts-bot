@@ -96,15 +96,33 @@ def parse_vtt(vtt_path: Path) -> list[TranscriptSegment]:
     return segments
 
 
+def _ytdlp_base_opts(run_dir: Path | None = None) -> dict:
+    """Build shared yt-dlp options, writing YT_COOKIES to disk if provided."""
+    opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+    }
+    yt_cookies_env = os.getenv("YT_COOKIES", "").strip()
+    if yt_cookies_env:
+        target_dir = run_dir or Path("output")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        cookie_file = target_dir / "cookies.txt"
+        cookie_file.write_text(yt_cookies_env, encoding="utf-8")
+        opts["cookiefile"] = str(cookie_file)
+    else:
+        opts["extractor_args"] = {"youtube": {"player_client": ["tv_embedded", "android", "web"]}}
+    return opts
+
+
 def pick_candidate_url(
     config: PipelineConfig,
     url: str | None = None,
     query: str | None = None,
+    run_dir: Path | None = None,
 ) -> dict:
     """Resolve a direct URL or search YouTube for an unprocessed Facts/Science/History video."""
     ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
+        **_ytdlp_base_opts(run_dir),
         "extract_flat": True,
         "skip_download": True,
     }
@@ -151,23 +169,13 @@ def fetch_source_video(
 ) -> SourceVideo:
     """Download a source video (optional for dry-run) and its English subtitles."""
     run_dir.mkdir(parents=True, exist_ok=True)
-    candidate = pick_candidate_url(config, url=url, query=query)
+    candidate = pick_candidate_url(config, url=url, query=query, run_dir=run_dir)
     target_url = candidate["url"]
 
-    cookie_file: Path | None = None
-    yt_cookies_env = os.getenv("YT_COOKIES", "").strip()
-    if yt_cookies_env:
-        cookie_file = run_dir / "cookies.txt"
-        cookie_file.write_text(yt_cookies_env, encoding="utf-8")
-
     base_opts = {
-        "quiet": True,
-        "no_warnings": True,
+        **_ytdlp_base_opts(run_dir),
         "outtmpl": str(run_dir / "source.%(ext)s"),
-        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "android", "web"]}},
     }
-    if cookie_file:
-        base_opts["cookiefile"] = str(cookie_file)
 
     with yt_dlp.YoutubeDL({**base_opts, "skip_download": True}) as ydl:
         info = ydl.extract_info(target_url, download=False)
