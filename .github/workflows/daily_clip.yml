@@ -1,0 +1,98 @@
+name: Daily Facts & Science Clip
+
+on:
+  schedule:
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: "Optional YouTube video/channel/playlist URL"
+        required: false
+        type: string
+        default: ""
+      query:
+        description: "Optional search query (leave blank for random Facts/Science/History)"
+        required: false
+        type: string
+        default: ""
+      crop_mode:
+        description: "9:16 framing mode"
+        required: true
+        default: "blur"
+        type: choice
+        options:
+          - blur
+          - fill
+      privacy:
+        description: "YouTube privacy setting"
+        required: true
+        default: "public"
+        type: choice
+        options:
+          - private
+          - unlisted
+          - public
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  clip-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore processed video history
+        uses: actions/cache/restore@v4
+        with:
+          path: output/history/
+          key: clip-history-${{ github.run_id }}
+          restore-keys: |
+            clip-history-
+
+      - name: Fetch, clip, caption & upload Short
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.groq.com/openai/v1' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || 'llama-3.3-70b-versatile' }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET_VALUE: ${{ secrets.YT_CLIENT_SECRET_VALUE }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: |
+          ARGS="--crop-mode ${{ github.event.inputs.crop_mode || 'blur' }} --upload --privacy ${{ github.event.inputs.privacy || 'public' }}"
+          if [ -n "${{ github.event.inputs.source_url }}" ]; then
+            ARGS="$ARGS --url \"${{ github.event.inputs.source_url }}\""
+          elif [ -n "${{ github.event.inputs.query }}" ]; then
+            ARGS="$ARGS --query \"${{ github.event.inputs.query }}\""
+          fi
+          eval python scripts/run_pipeline.py $ARGS
+
+      - name: Save processed video history
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: output/history/
+          key: clip-history-${{ github.run_id }}
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clip-output-${{ github.run_id }}
+          path: output/runs/
+          retention-days: 3
+
