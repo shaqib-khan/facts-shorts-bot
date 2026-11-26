@@ -101,6 +101,7 @@ def _ytdlp_base_opts(run_dir: Path | None = None) -> dict:
     opts: dict = {
         "quiet": True,
         "no_warnings": True,
+        "js_runtimes": {"node": {}},
     }
     yt_cookies_env = os.getenv("YT_COOKIES", "").strip()
     if yt_cookies_env:
@@ -177,7 +178,7 @@ def fetch_source_video(
         "outtmpl": str(run_dir / "source.%(ext)s"),
     }
 
-    with yt_dlp.YoutubeDL({**base_opts, "skip_download": True}) as ydl:
+    with yt_dlp.YoutubeDL({**base_opts, "skip_download": True, "ignore_no_formats_error": True}) as ydl:
         info = ydl.extract_info(target_url, download=False)
 
     # Fetch English subtitles best-effort (YouTube may rate-limit subtitle endpoints with HTTP 429)
@@ -198,7 +199,7 @@ def fetch_source_video(
     if download_video:
         dl_opts = {
             **base_opts,
-            "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+            "format": "bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b",
             "merge_output_format": "mp4",
         }
         with yt_dlp.YoutubeDL(dl_opts) as ydl:
