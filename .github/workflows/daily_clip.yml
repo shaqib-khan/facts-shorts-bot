@@ -72,6 +72,7 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET_VALUE: ${{ secrets.YT_CLIENT_SECRET_VALUE }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
         run: |
           ARGS="--crop-mode ${{ github.event.inputs.crop_mode || 'blur' }} --upload --privacy ${{ github.event.inputs.privacy || 'public' }}"
           if [ -n "${{ github.event.inputs.source_url }}" ]; then

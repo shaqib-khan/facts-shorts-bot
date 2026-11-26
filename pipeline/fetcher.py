@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import os
 import random
 import re
 from dataclasses import dataclass
@@ -153,11 +154,20 @@ def fetch_source_video(
     candidate = pick_candidate_url(config, url=url, query=query)
     target_url = candidate["url"]
 
+    cookie_file: Path | None = None
+    yt_cookies_env = os.getenv("YT_COOKIES", "").strip()
+    if yt_cookies_env:
+        cookie_file = run_dir / "cookies.txt"
+        cookie_file.write_text(yt_cookies_env, encoding="utf-8")
+
     base_opts = {
         "quiet": True,
         "no_warnings": True,
         "outtmpl": str(run_dir / "source.%(ext)s"),
+        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "android", "web"]}},
     }
+    if cookie_file:
+        base_opts["cookiefile"] = str(cookie_file)
 
     with yt_dlp.YoutubeDL({**base_opts, "skip_download": True}) as ydl:
         info = ydl.extract_info(target_url, download=False)
