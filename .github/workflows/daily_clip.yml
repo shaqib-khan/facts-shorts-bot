@@ -5,24 +5,6 @@ on:
     - cron: "0 10 * * *"
   workflow_dispatch:
     inputs:
-      source_url:
-        description: "Optional YouTube video/channel/playlist URL"
-        required: false
-        type: string
-        default: ""
-      query:
-        description: "Optional search query (leave blank for random Facts/Science/History)"
-        required: false
-        type: string
-        default: ""
-      crop_mode:
-        description: "9:16 framing mode"
-        required: true
-        default: "blur"
-        type: choice
-        options:
-          - blur
-          - fill
       privacy:
         description: "YouTube privacy setting"
         required: true
@@ -56,15 +38,15 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Restore processed video history
+      - name: Restore topic history
         uses: actions/cache/restore@v4
         with:
           path: output/history/
-          key: clip-history-${{ github.run_id }}
+          key: cloud-history-${{ github.run_id }}
           restore-keys: |
-            clip-history-
+            cloud-history-
 
-      - name: Fetch, clip, caption & upload Short
+      - name: Generate, render & upload Short
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.groq.com/openai/v1' }}
@@ -72,28 +54,20 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET_VALUE: ${{ secrets.YT_CLIENT_SECRET_VALUE }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          YT_COOKIES: ${{ secrets.YT_COOKIES }}
         run: |
-          ARGS="--crop-mode ${{ github.event.inputs.crop_mode || 'blur' }} --upload --privacy ${{ github.event.inputs.privacy || 'public' }}"
-          if [ -n "${{ github.event.inputs.source_url }}" ]; then
-            ARGS="$ARGS --url \"${{ github.event.inputs.source_url }}\""
-          elif [ -n "${{ github.event.inputs.query }}" ]; then
-            ARGS="$ARGS --query \"${{ github.event.inputs.query }}\""
-          fi
-          eval python scripts/run_pipeline.py $ARGS
+          python scripts/run_cloud_short.py --upload --privacy "${{ github.event.inputs.privacy || 'public' }}"
 
-      - name: Save processed video history
+      - name: Save topic history
         if: always()
         uses: actions/cache/save@v4
         with:
           path: output/history/
-          key: clip-history-${{ github.run_id }}
+          key: cloud-history-${{ github.run_id }}
 
       - name: Upload run artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: clip-output-${{ github.run_id }}
+          name: cloud-output-${{ github.run_id }}
           path: output/runs/
           retention-days: 3
-
